@@ -5,11 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tạo Danh Sách Thi Thăng Đai Chính Thức</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Thư viện xuất Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root { --primary: #2c3e50; --accent: #e67e22; --success: #27ae60; --bg: #f4f7f6; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; }
-        .container { max-width: 1300px; margin: 0 auto; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); margin: 0; padding: 0; }
+        
+        /* MÀN HÌNH CHÀO MỪNG */
+        #entryScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 3000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #entryScreen h1 { color: var(--primary); margin-bottom: 10px; text-transform: uppercase; font-size: 2.2rem; text-align: center;}
+        #entryScreen p { color: #6c757d; margin-bottom: 30px; font-size: 1.2rem; font-weight: 500; text-align: center;}
+        .btn-start { background: linear-gradient(135deg, #e67e22, #d35400); font-size: 1.3rem; padding: 15px 35px; border-radius: 30px; border: none; color: white; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(230, 126, 34, 0.4); animation: pulse 2s infinite; transition: 0.3s;}
+        .btn-start:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(230, 126, 34, 0.6); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(230, 126, 34, 0); } 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); } }
+
+        /* MÀN HÌNH LOADING */
+        #loader { display: none; flex-direction: column; justify-content: center; align-items: center; height: 100vh; position: fixed; top: 0; left: 0; width: 100%; background: var(--bg); z-index: 2000;}
+        #loader h2 { color: var(--primary); margin-bottom: 20px; font-size: 1.6rem; text-align: center; }
+        .progress-container { width: 90%; max-width: 500px; background-color: #e9ecef; border-radius: 20px; height: 28px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); position: relative; }
+        .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #27ae60, #2ecc71); border-radius: 20px; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem; background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%, transparent 75%, transparent); background-size: 1rem 1rem; animation: progress-stripes 1s linear infinite; }
+        @keyframes progress-stripes { from { background-position: 1rem 0; } to { background-position: 0 0; } }
+        .progress-status { margin-top: 15px; color: var(--success); font-weight: bold; font-size: 1.1rem; }
+
+        /* BỐ CỤC CHÍNH */
+        .container { max-width: 1300px; margin: 0 auto; padding: 20px; display: none; } /* Ẩn lúc đầu */
         
         .header-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .header-panel h2 { color: var(--primary); margin: 0; }
@@ -31,15 +50,33 @@
         .selected-list { background: #fff; border-left: 4px solid var(--success); }
         .selected-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
         .badge-region { background: #ebf5fb; color: #2980b9; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
-        
-        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
     </style>
 </head>
 <body>
 
-<div id="loading"><i class="fas fa-spinner fa-spin fa-3x" style="color: var(--accent);"></i></div>
+<!-- THẺ AUDIO CHỨA NHẠC CHỜ -->
+<audio id="bgMusic" loop>
+    <source src="nhac_cho_2.mp3" type="audio/mpeg">
+</audio>
 
-<div class="container">
+<!-- MÀN HÌNH 1: NÚT BẮT ĐẦU -->
+<div id="entryScreen">
+    <h1><i class="fas fa-user-check"></i> Cổng Chốt Danh Sách Thi Thăng Đai</h1>
+    <p>Hệ thống tự động lọc võ sinh đủ điều kiện từ dữ liệu Google Sheets</p>
+    <button class="btn-start" onclick="startApp()"><i class="fas fa-play"></i> BẮT ĐẦU TRUY XUẤT</button>
+</div>
+
+<!-- MÀN HÌNH 2: LOADING -->
+<div id="loader">
+    <h2><i class="fas fa-cloud-download-alt"></i> Đang tải dữ liệu võ sinh...</h2>
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar">0%</div>
+    </div>
+    <div class="progress-status" id="progressStatus">Đang kết nối tới máy chủ...</div>
+</div>
+
+<!-- MÀN HÌNH 3: GIAO DIỆN CHÍNH (ẨN LÚC ĐẦU) -->
+<div class="container" id="mainApp">
     <div class="header-panel">
         <h2><i class="fas fa-file-signature"></i> Lập Danh Sách Thi Chính Thức</h2>
         <button class="btn btn-export" onclick="exportToExcel()">
@@ -55,6 +92,7 @@
     </div>
 
     <div class="main-layout">
+        <!-- BẢNG TỔNG CÁC VÕ SINH ĐỦ ĐIỀU KIỆN -->
         <div class="card">
             <h3 style="margin-bottom: 15px; color: var(--accent);">Võ sinh đủ điều kiện (Tick chọn từ Sheets)</h3>
             <div style="max-height: 600px; overflow-y: auto;">
@@ -74,6 +112,7 @@
             </div>
         </div>
 
+        <!-- DANH SÁCH CHỐT ĐỂ THI -->
         <div class="card selected-list">
             <h3 style="margin-bottom: 15px; color: var(--success);">Danh sách thi dự kiến (<span id="selectedCount">0</span>)</h3>
             <div id="selectedContainer" style="max-height: 550px; overflow-y: auto;">
@@ -85,18 +124,94 @@
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbwmw3VS4rb5CZP2TBNmgZ1M9yIc8oqt3P2sp6q7z3fnAKdwaj2E2K6jW5drj2rj4Xvbsg/exec"; // Dán link web app sau khi deploy
+    // ==========================================
+    // DÁN LINK API CỦA BẠN VÀO ĐÂY:
+    // ==========================================
+    const API_URL = "https://script.google.com/macros/s/AKfycbwmw3VS4rb5CZP2TBNmgZ1M9yIc8oqt3P2sp6q7z3fnAKdwaj2E2K6jW5drj2rj4Xvbsg/exec"; 
+    
     let allData = [];
     let selectedStudents = [];
+    let currentProgress = 0;
+    let progressInterval;
 
+    // --- CÁC HÀM XỬ LÝ LOADING VÀ NHẠC CHỜ ---
+    function startApp() {
+        // Ẩn màn hình Start
+        document.getElementById('entryScreen').style.display = 'none';
+        
+        // Phát nhạc nền
+        const audio = document.getElementById('bgMusic');
+        audio.volume = 0.5;
+        audio.play().catch(e => console.log("Trình duyệt chặn nhạc tự động:", e));
+        
+        // Hiện màn hình Loading
+        document.getElementById('loader').style.display = 'flex';
+        
+        // Chạy thanh phần trăm giả lập
+        startLoadingSimulation();
+        
+        // Gọi API lấy dữ liệu thực tế
+        fetchData();
+    }
+
+    function startLoadingSimulation() {
+        const progressBar = document.getElementById('progressBar');
+        const progressStatus = document.getElementById('progressStatus');
+        
+        progressInterval = setInterval(() => {
+            if (currentProgress < 90) {
+                currentProgress += Math.floor(Math.random() * 12) + 1;
+                if (currentProgress > 90) currentProgress = 90;
+                
+                progressBar.style.width = currentProgress + "%";
+                progressBar.innerText = currentProgress + "%";
+                
+                if(currentProgress > 30) progressStatus.innerText = "Đang tổng hợp danh sách đủ điều kiện...";
+                if(currentProgress >= 60) progressStatus.innerText = "Đang phân tích thông số cấp đai & khu vực...";
+            }
+        }, 300);
+    }
+
+    function completeLoading() {
+        clearInterval(progressInterval);
+        
+        document.getElementById('progressBar').style.width = "100%";
+        document.getElementById('progressBar').innerText = "100%";
+        document.getElementById('progressStatus').innerText = "Hoàn tất! Hệ thống đã sẵn sàng.";
+        
+        setTimeout(() => {
+            // Tắt nhạc chờ
+            const audio = document.getElementById('bgMusic');
+            if(audio) {
+                audio.pause();
+                audio.currentTime = 0; 
+            }
+            
+            // Ẩn Loading, Hiện App
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block'; 
+        }, 800); 
+    }
+
+    // --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
     async function fetchData() {
         try {
+            if(API_URL === "LINK_API_CUA_BAN") {
+                alert("Vui lòng dán Link API vào mã nguồn HTML trước!");
+                clearInterval(progressInterval);
+                return;
+            }
             const res = await fetch(API_URL);
             const json = await res.json();
             allData = json.data;
             renderMasterTable(allData);
-            document.getElementById('loading').style.display = 'none';
-        } catch (e) { alert("Lỗi tải dữ liệu!"); }
+            
+            // Dữ liệu tải xong -> Báo hoàn thành loading
+            completeLoading();
+        } catch (e) { 
+            alert("Lỗi tải dữ liệu!"); 
+            clearInterval(progressInterval);
+        }
     }
 
     function renderMasterTable(data) {
@@ -135,7 +250,7 @@
         document.getElementById('selectedCount').innerText = selectedStudents.length;
         
         if (selectedStudents.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Chưa có võ sinh nào.</p>';
+            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Chưa có võ sinh nào được thêm.</p>';
             return;
         }
 
@@ -174,7 +289,6 @@
             return;
         }
 
-        // Chuẩn bị dữ liệu để xuất
         const excelData = selectedStudents.map((s, i) => ({
             "STT": i + 1,
             "Họ và Tên": s.name,
@@ -192,11 +306,8 @@
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "DanhSachThi");
         
-        // Xuất file
         XLSX.writeFile(workbook, "Danh_Sach_Thi_Thang_Dai_Chinh_Thuc.xlsx");
     }
-
-    window.onload = fetchData;
 </script>
 </body>
 </html>
