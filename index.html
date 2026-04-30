@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tạo Danh Sách Thi Thăng Đai Chính Thức</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #2c3e50; --accent: #e67e22; --success: #27ae60; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        
+        .header-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header-panel h2 { color: var(--primary); margin: 0; }
+        
+        .toolbar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .btn { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: 0.3s; }
+        .btn-sort { background: #ecf0f1; color: var(--primary); }
+        .btn-sort:hover { background: #dcdde1; }
+        .btn-export { background: var(--success); color: white; margin-left: auto; }
+        .btn-add { background: var(--accent); color: white; font-size: 0.8rem; padding: 5px 10px; }
+
+        .main-layout { display: grid; grid-template-columns: 1fr 400px; gap: 20px; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background: #f8f9fa; color: var(--primary); position: sticky; top: 0; }
+        
+        .selected-list { background: #fff; border-left: 4px solid var(--success); }
+        .selected-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+        .badge-region { background: #ebf5fb; color: #2980b9; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+        
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    </style>
+</head>
+<body>
+
+<div id="loading"><i class="fas fa-spinner fa-spin fa-3x" style="color: var(--accent);"></i></div>
+
+<div class="container">
+    <div class="header-panel">
+        <h2><i class="fas fa-file-signature"></i> Lập Danh Sách Thi Chính Thức</h2>
+        <button class="btn btn-export" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i> XUẤT FILE EXCEL (.XLSX)
+        </button>
+    </div>
+
+    <div class="toolbar">
+        <button class="btn btn-sort" onclick="sortData('region')"><i class="fas fa-map-marker-alt"></i> Sắp xếp Khu vực</button>
+        <button class="btn btn-sort" onclick="sortData('fedBelt')"><i class="fas fa-award"></i> Sắp xếp Đai Liên đoàn</button>
+        <button class="btn btn-sort" onclick="sortData('belt')"><i class="fas fa-mandalorian"></i> Sắp xếp Đai Môn phái</button>
+        <input type="text" id="searchInput" placeholder="Tìm tên, CLB..." style="padding: 10px; border: 1px solid #ddd; border-radius: 6px; width: 250px;" onkeyup="filterTable()">
+    </div>
+
+    <div class="main-layout">
+        <div class="card">
+            <h3 style="margin-bottom: 15px; color: var(--accent);">Võ sinh đủ điều kiện (Tick chọn từ Sheets)</h3>
+            <div style="max-height: 600px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>STT</th>
+                            <th>Họ và Tên</th>
+                            <th>Đai Hiện Tại</th>
+                            <th>Đai L.Đoàn</th>
+                            <th>Đơn vị / Khu vực</th>
+                            <th>Tác vụ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="masterTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card selected-list">
+            <h3 style="margin-bottom: 15px; color: var(--success);">Danh sách thi dự kiến (<span id="selectedCount">0</span>)</h3>
+            <div id="selectedContainer" style="max-height: 550px; overflow-y: auto;">
+                <p style="text-align: center; color: #999; padding: 20px;">Chưa có võ sinh nào được thêm.</p>
+            </div>
+            <button class="btn" style="width: 100%; margin-top: 15px; justify-content: center; background: #eee;" onclick="clearSelection()">Xóa hết</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbwmw3VS4rb5CZP2TBNmgZ1M9yIc8oqt3P2sp6q7z3fnAKdwaj2E2K6jW5drj2rj4Xvbsg/exec"; // Dán link web app sau khi deploy
+    let allData = [];
+    let selectedStudents = [];
+
+    async function fetchData() {
+        try {
+            const res = await fetch(API_URL);
+            const json = await res.json();
+            allData = json.data;
+            renderMasterTable(allData);
+            document.getElementById('loading').style.display = 'none';
+        } catch (e) { alert("Lỗi tải dữ liệu!"); }
+    }
+
+    function renderMasterTable(data) {
+        const tbody = document.getElementById('masterTableBody');
+        tbody.innerHTML = data.map((s, index) => `
+            <tr>
+                <td>${index + 1}</td>
+                <td><b>${s.name}</b><br><small>${s.year} | ${s.gender}</small></td>
+                <td><span class="badge-region">${s.belt}</span></td>
+                <td><b style="color: #d35400;">${s.fedBelt}</b></td>
+                <td>${s.club}<br><small class="badge-region">${s.region}</small></td>
+                <td>
+                    <button class="btn btn-add" onclick="addToExam('${s.stt}')">
+                        <i class="fas fa-plus"></i> Thêm
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function addToExam(stt) {
+        const student = allData.find(s => s.stt == stt);
+        if (!selectedStudents.find(s => s.stt == stt)) {
+            selectedStudents.push(student);
+            renderSelectedList();
+        }
+    }
+
+    function removeFromExam(stt) {
+        selectedStudents = selectedStudents.filter(s => s.stt != stt);
+        renderSelectedList();
+    }
+
+    function renderSelectedList() {
+        const container = document.getElementById('selectedContainer');
+        document.getElementById('selectedCount').innerText = selectedStudents.length;
+        
+        if (selectedStudents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Chưa có võ sinh nào.</p>';
+            return;
+        }
+
+        container.innerHTML = selectedStudents.map(s => `
+            <div class="selected-item">
+                <div>
+                    <b>${s.name}</b><br>
+                    <small>${s.club} - ${s.fedBelt}</small>
+                </div>
+                <i class="fas fa-times-circle" style="color: #e74c3c; cursor: pointer;" onclick="removeFromExam('${s.stt}')"></i>
+            </div>
+        `).join('');
+    }
+
+    function sortData(type) {
+        if (type === 'region') allData.sort((a, b) => a.region.localeCompare(b.region));
+        if (type === 'fedBelt') allData.sort((a, b) => a.fedBelt.localeCompare(b.fedBelt));
+        if (type === 'belt') allData.sort((a, b) => a.belt.localeCompare(b.belt));
+        renderMasterTable(allData);
+    }
+
+    function filterTable() {
+        const val = document.getElementById('searchInput').value.toLowerCase();
+        const filtered = allData.filter(s => s.name.toLowerCase().includes(val) || s.club.toLowerCase().includes(val));
+        renderMasterTable(filtered);
+    }
+
+    function clearSelection() {
+        selectedStudents = [];
+        renderSelectedList();
+    }
+
+    function exportToExcel() {
+        if (selectedStudents.length === 0) {
+            alert("Vui lòng thêm võ sinh vào danh sách thi trước khi xuất!");
+            return;
+        }
+
+        // Chuẩn bị dữ liệu để xuất
+        const excelData = selectedStudents.map((s, i) => ({
+            "STT": i + 1,
+            "Họ và Tên": s.name,
+            "Năm sinh": s.year,
+            "Giới tính": s.gender,
+            "Cấp đai hiện tại": s.belt,
+            "Cấp đai liên đoàn": s.fedBelt,
+            "Chiều cao (cm)": s.height,
+            "Cân nặng (kg)": s.weight,
+            "Đơn vị": s.club,
+            "Khu vực": s.region
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "DanhSachThi");
+        
+        // Xuất file
+        XLSX.writeFile(workbook, "Danh_Sach_Thi_Thang_Dai_Chinh_Thuc.xlsx");
+    }
+
+    window.onload = fetchData;
+</script>
+</body>
+</html>
